@@ -88,7 +88,7 @@
   <customwidget>
    <class>ChessBoard</class>
    <extends>QFrame</extends>
-   <header>Golang_chessboard.h</header>
+   <header>Gobang_chessboard.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

@@ -4,6 +4,7 @@ from PyQt5 import QtGui
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import QFrame
 from PyQt5.QtGui import QPainter, QPen, QBrush, QColor
+from Gobang_ import *
 
 
 class ChessBoard(QFrame):
@@ -75,9 +76,9 @@ class ChessBoard(QFrame):
         painter.setPen(self.PEN_THIN)
         for x in range(15):
             for y in range(15):
-                if self.field[x][y] == 1:
+                if self.field[x][y] == ChessColor.black.value:
                     painter.setBrush(self.BRUSH_1)
-                elif self.field[x][y] == 2:
+                elif self.field[x][y] == ChessColor.white.value:
                     painter.setBrush(self.BRUSH_2)
                 else:
                     continue

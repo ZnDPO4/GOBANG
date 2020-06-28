@@ -5,6 +5,8 @@ from PyQt5.QtWidgets import QApplication, QMainWindow
 from ui.UI_GobangClientWindow import Ui_Gobang_Mainwindow
 from network import *
 import random
+from Gobang_ import *
+from Gobang_AI import AI
 
 
 class ClientMessageHandle(QThread):
@@ -56,33 +58,37 @@ class GobangClient(QMainWindow, Ui_Gobang_Mainwindow):
         self.setupUi(self)
         self.chess_board.sig_click.connect(self.go_chess)
         self.single_player.triggered.connect(self.start_one_player)
-        self.two_player.setEnabled(False)
-        # self.double_player.triggered.connect()
+        self.two_player.triggered.connect(self.start_two_player)
         self.menu_socket.triggered.connect(self.connect_server)
+        self.menu_socket.setEnabled(False)
 
         self.field = [[0 for i in range(15)] for j in range(15)]
         self.chess_board.field = self.field
         self.game_type = None  # one, two, online
+        self.started = False
         self.can_go = True  # 避免连续多次落子
-        self.player_now = None  # 当前行动回合的玩家编号，两玩家分别1，2表示
-        self.my_num = 0  # 自己的编号
+        self.player_now = ChessColor.black
+        self.my_color = ChessColor.none  # 自己的编号
         self.count = 0
 
     def start_game(self, num):
-        self.my_num = num
+        self.started = True
+        self.my_color = ChessColor(num)
         for x in range(15):
             for y in range(15):
                 self.field[x][y] = 0
         self.chess_board.clear()
-        color = "黑" if num == 1 else "白"
+        color = "黑" if num == ChessColor.black.value else "白"
         print("游戏开始,你是{}方".format(color))
-        self.statusbar.showMessage("游戏开始,你是{}方".format(color), 10000)
-        self.player_now = 1  # 黑方先走
-        if self.game_type == "one" and self.my_num != 1:
-            self.AI_go()
+        self.statusbar.showMessage("游戏开始,你是{}方".format(color), 5000)
+        self.player_now = ChessColor.black  # 黑方先走
+        if self.game_type == "one":  # 单人游戏
+            self.AI = AI(self.field)
+            if self.my_color == ChessColor.white:  # 玩家执白，AI先走
+                self.AI_go(None, None)
 
     def go_chess(self, x, y):
-        if self.player_now == self.my_num and self.can_go:
+        if self.started and self.player_now == self.my_color and self.can_go:
             width = self.chess_board.width()
             x = x // (width // 15)
             y = y // (width // 15)
@@ -92,15 +98,25 @@ class GobangClient(QMainWindow, Ui_Gobang_Mainwindow):
                 if self.game_type == "online":
                     self.send_chess(x, y)
                 elif self.game_type == "one":
-                    self.chess_down(self.my_num, x, y)
-                    self.player_now = 3 - self.player_now  # 玩家切换
-                    self.AI_go()
+                    self.chess_down(self.my_color, x, y)
+                    self.player_now = ChessColor(-self.player_now.value)  # 玩家切换
+                    self.AI_go(x, y)
                 elif self.game_type == "two":
-                    pass
+                    self.chess_down(self.my_color, x, y)
+                    self.player_now = ChessColor(-self.player_now.value)  # 玩家切换
+                    self.my_color = ChessColor(-self.my_color.value)
+                    self.can_go = True
 
-    def chess_down(self, player_num, x, y):
-        self.field[x][y] = player_num
+    def chess_down(self, player_color, x, y):
+        color = "黑" if player_color == ChessColor.black else "白"
+        print("{}方落子".format(color))
+        self.field[x][y] = player_color.value
         self.chess_board.sig_chess_down.emit(x, y)
+        if exam(self.field, self.player_now, x, y) is True:
+            self.started = False
+            color = "黑" if player_color == ChessColor.black else "白"
+            print("{}方获胜".format(color))
+            self.statusbar.showMessage("{}方获胜".format(color))
 
     # ----------------------------------------单人游戏----------------------------------------
     def start_one_player(self):
@@ -108,13 +124,17 @@ class GobangClient(QMainWindow, Ui_Gobang_Mainwindow):
         num = random.randint(1, 2)
         self.start_game(num)
 
-    def AI_go(self):
-        # x, y = self.AI.go()
-        self.count += 1
-        x, y = (self.count, 2)
-        self.chess_down(self.player_now, x, y)
-        self.player_now = 3 - self.player_now  # 玩家切换
-        self.can_go = True
+    def AI_go(self, x, y):
+        if self.started:
+            new_x, new_y = self.AI.go(x, y)
+            self.chess_down(self.player_now, new_x, new_y)
+            self.player_now = ChessColor(-self.player_now.value)  # 玩家切换
+            self.can_go = True
+
+    # ----------------------------------------双人游戏----------------------------------------
+    def start_two_player(self):
+        self.game_type = "two"
+        self.start_game(ChessColor.black.value)
 
     # ----------------------------------------联机----------------------------------------
     def connect_server(self):
@@ -157,14 +177,14 @@ class GobangClient(QMainWindow, Ui_Gobang_Mainwindow):
 
     def send_chess(self, x, y):
         """向服务端发送落子位置"""
-        message = to_message("chess", num=self.my_num, x=x, y=y)
+        message = to_message("chess", num=self.my_color, x=x, y=y)
         send(self.socket, message)
 
     def get_chess(self, num, x, y):
         """从服务端接收落子信息"""
         self.chess_down(num, x, y)
-        self.player_now = 3 - num  # 玩家切换
-        if self.my_num == self.player_now:  # 接下来是自己回合则可以行动
+        self.player_now = ChessColor(-self.player_now.value)  # 玩家切换
+        if self.my_color == self.player_now:  # 接下来是自己回合则可以行动
             self.can_go = True
 
 

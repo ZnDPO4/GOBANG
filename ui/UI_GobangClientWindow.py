@@ -58,4 +58,4 @@ class Ui_Gobang_Mainwindow(object):
         self.menu_socket.setTitle(_translate("Gobang_Mainwindow", "联机"))
         self.single_player.setText(_translate("Gobang_Mainwindow", "单人"))
         self.two_player.setText(_translate("Gobang_Mainwindow", "双人"))
-from Golang_chessboard import ChessBoard
+from Gobang_chessboard import ChessBoard
