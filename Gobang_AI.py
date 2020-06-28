@@ -14,4 +14,3 @@ class AI:
 
         return new_x, new_y
         # AI落子会跳过落子位置重复的检查，所以要自己做判断
-

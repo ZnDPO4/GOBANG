@@ -97,3 +97,4 @@ def exam_win(player_color, situation):
         else:
             continue
     return False
+
