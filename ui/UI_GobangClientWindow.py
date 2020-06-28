@@ -59,3 +59,4 @@ class Ui_Gobang_Mainwindow(object):
         self.single_player.setText(_translate("Gobang_Mainwindow", "单人"))
         self.two_player.setText(_translate("Gobang_Mainwindow", "双人"))
 from Gobang_chessboard import ChessBoard
+

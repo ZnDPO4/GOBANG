@@ -102,3 +102,4 @@ class ChessBoard(QFrame):
         else:
             new_x = new_y = old_size.width()
         self.resize(new_x, new_y)
+
