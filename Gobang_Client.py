@@ -40,13 +40,17 @@ class ClientMessageHandle(QThread):
                 elif type_ == 'start':  # 获取执子颜色,开始游戏
                     num = message.get('number')
                     self.start_game.emit(num)
-                elif type_ == 'down':  # 落子
+                elif type_ == 'go':  # 落子
                     player_num = message.get("num")
                     x = message.get('x')
                     y = message.get('y')
                     self.down.emit(player_num, x, y)
+                elif type_ == 'win':
+                    player_num = message.get("num")
+                    self.win.emit(player_num)
             except Exception:
                 print(traceback.print_exc())
+                break
 
 
 class GobangClient(QMainWindow, Ui_Gobang_Mainwindow):
@@ -59,8 +63,8 @@ class GobangClient(QMainWindow, Ui_Gobang_Mainwindow):
         self.chess_board.sig_click.connect(self.go_chess)
         self.single_player.triggered.connect(self.start_one_player)
         self.two_player.triggered.connect(self.start_two_player)
-        self.menu_socket.triggered.connect(self.connect_server)
-        self.menu_socket.setEnabled(False)
+        self.online_game.triggered.connect(self.connect_server)
+        self.online_game.setEnabled(True)
 
         self.field = [[0 for i in range(15)] for j in range(15)]
         self.chess_board.field = self.field
@@ -88,7 +92,8 @@ class GobangClient(QMainWindow, Ui_Gobang_Mainwindow):
                 self.AI_go(None, None)
 
     def go_chess(self, x, y):
-        if self.started and self.player_now == self.my_color and self.can_go:
+        print(self.started, self.can_go, self.player_now, self.my_color)
+        if self.started and self.can_go and self.player_now == self.my_color:
             width = self.chess_board.width()
             x = x // (width // 15)
             y = y // (width // 15)
@@ -98,23 +103,22 @@ class GobangClient(QMainWindow, Ui_Gobang_Mainwindow):
                 if self.game_type == "online":
                     self.send_chess(x, y)
                 elif self.game_type == "one":
-                    self.chess_down(self.my_color, x, y)
+                    self.chess_down(self.my_color.value, x, y)
                     self.player_now = ChessColor(-self.player_now.value)  # 玩家切换
                     self.AI_go(x, y)
                 elif self.game_type == "two":
-                    self.chess_down(self.my_color, x, y)
+                    self.chess_down(self.my_color.value, x, y)
                     self.player_now = ChessColor(-self.player_now.value)  # 玩家切换
                     self.my_color = ChessColor(-self.my_color.value)
                     self.can_go = True
 
-    def chess_down(self, player_color, x, y):
-        color = "黑" if player_color == ChessColor.black else "白"
+    def chess_down(self, player_num, x, y):
+        color = "黑" if player_num == ChessColor.black.value else "白"
         print("{}方落子".format(color))
-        self.field[x][y] = player_color.value
+        self.field[x][y] = player_num
         self.chess_board.sig_chess_down.emit(x, y)
         if exam(self.field, self.player_now, x, y) is True:
             self.started = False
-            color = "黑" if player_color == ChessColor.black else "白"
             print("{}方获胜".format(color))
             self.statusbar.showMessage("{}方获胜".format(color))
 
@@ -127,7 +131,7 @@ class GobangClient(QMainWindow, Ui_Gobang_Mainwindow):
     def AI_go(self, x, y):
         if self.started:
             new_x, new_y = self.AI.go(x, y)
-            self.chess_down(self.player_now, new_x, new_y)
+            self.chess_down(self.player_now.value, new_x, new_y)
             self.player_now = ChessColor(-self.player_now.value)  # 玩家切换
             self.can_go = True
 
@@ -138,11 +142,11 @@ class GobangClient(QMainWindow, Ui_Gobang_Mainwindow):
 
     # ----------------------------------------联机----------------------------------------
     def connect_server(self):
-        self.menu_socket.setEnabled(False)
+        self.online_game.setEnabled(False)
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            file = open("config.json", 'r')
+            file = open("config.json", 'rb')
             data = json.load(file)
             file.close()
             self.ip = data["server_address"]
@@ -151,7 +155,7 @@ class GobangClient(QMainWindow, Ui_Gobang_Mainwindow):
         except OSError:
             print("config.json打开失败")
             self.statusbar.showMessage("config.json打开失败")
-            self.menu_socket.setEnabled(True)
+            self.online_game.setEnabled(True)
         print('ip ({}), port ({}), 用户名: {}'.format(self.ip, self.port, self.user_name))
         new_thread(self.try_connect)
 
@@ -160,16 +164,18 @@ class GobangClient(QMainWindow, Ui_Gobang_Mainwindow):
             ip = str(self.ip)
             port = int(self.port)
             self.socket.connect((ip, port))
-            self.send_(to_message("name", user_name=self.user_name))
+            send(self.socket, to_message("name", user_name=self.user_name))
+            self.statusbar.showMessage("已连接服务端")
             self.ask_join_room()
             self.message_handle = ClientMessageHandle(self.socket)
-            self.message_handle.start_game.connect(self.start_game)
-            self.message_handle.down.connect(self.opponent_go)
+            self.message_handle.start_game.connect(self.start_online_game)
+            self.message_handle.down.connect(self.get_chess)
+            self.message_handle.win.connect(self.win)
             self.message_handle.start()
         except (TimeoutError, ConnectionRefusedError, OSError):
             print(traceback.print_exc())
             self.statusbar.showMessage("无法连接")
-            self.menu_socket.setEnabled(True)
+            self.online_game.setEnabled(True)
 
     def ask_join_room(self):
         """向服务端发送开始游戏请求"""
@@ -177,8 +183,12 @@ class GobangClient(QMainWindow, Ui_Gobang_Mainwindow):
 
     def send_chess(self, x, y):
         """向服务端发送落子位置"""
-        message = to_message("chess", num=self.my_color, x=x, y=y)
+        message = to_message("go", num=self.my_color.value, x=x, y=y)
         send(self.socket, message)
+
+    def start_online_game(self, num):
+        self.game_type = "online"
+        self.start_game(num)
 
     def get_chess(self, num, x, y):
         """从服务端接收落子信息"""
@@ -186,6 +196,12 @@ class GobangClient(QMainWindow, Ui_Gobang_Mainwindow):
         self.player_now = ChessColor(-self.player_now.value)  # 玩家切换
         if self.my_color == self.player_now:  # 接下来是自己回合则可以行动
             self.can_go = True
+
+    def win(self, player_num):
+        color = "黑" if player_num == ChessColor.black.value else "白"
+        self.started = False
+        print("{}方获胜".format(color))
+        self.statusbar.showMessage("{}方获胜".format(color))
 
 
 if __name__ == '__main__':

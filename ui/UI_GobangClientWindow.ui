@@ -59,28 +59,29 @@
    </property>
    <widget class="QMenu" name="menu_local">
     <property name="title">
-     <string>单机</string>
+     <string>开始游戏</string>
     </property>
     <addaction name="single_player"/>
     <addaction name="two_player"/>
-   </widget>
-   <widget class="QMenu" name="menu_socket">
-    <property name="title">
-     <string>联机</string>
-    </property>
+    <addaction name="separator"/>
+    <addaction name="online_game"/>
    </widget>
    <addaction name="menu_local"/>
-   <addaction name="menu_socket"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="single_player">
    <property name="text">
-    <string>单人</string>
+    <string>单机单人</string>
    </property>
   </action>
   <action name="two_player">
    <property name="text">
-    <string>双人</string>
+    <string>单机双人</string>
+   </property>
+  </action>
+  <action name="online_game">
+   <property name="text">
+    <string>联机游戏</string>
    </property>
   </action>
  </widget>
@@ -95,4 +96,3 @@
  <resources/>
  <connections/>
 </ui>
-

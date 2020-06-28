@@ -33,8 +33,6 @@ class Ui_Gobang_Mainwindow(object):
         self.menubar.setObjectName("menubar")
         self.menu_local = QtWidgets.QMenu(self.menubar)
         self.menu_local.setObjectName("menu_local")
-        self.menu_socket = QtWidgets.QMenu(self.menubar)
-        self.menu_socket.setObjectName("menu_socket")
         Gobang_Mainwindow.setMenuBar(self.menubar)
         self.statusbar = QtWidgets.QStatusBar(Gobang_Mainwindow)
         self.statusbar.setObjectName("statusbar")
@@ -43,10 +41,13 @@ class Ui_Gobang_Mainwindow(object):
         self.single_player.setObjectName("single_player")
         self.two_player = QtWidgets.QAction(Gobang_Mainwindow)
         self.two_player.setObjectName("two_player")
+        self.online_game = QtWidgets.QAction(Gobang_Mainwindow)
+        self.online_game.setObjectName("online_game")
         self.menu_local.addAction(self.single_player)
         self.menu_local.addAction(self.two_player)
+        self.menu_local.addSeparator()
+        self.menu_local.addAction(self.online_game)
         self.menubar.addAction(self.menu_local.menuAction())
-        self.menubar.addAction(self.menu_socket.menuAction())
 
         self.retranslateUi(Gobang_Mainwindow)
         QtCore.QMetaObject.connectSlotsByName(Gobang_Mainwindow)
@@ -54,9 +55,8 @@ class Ui_Gobang_Mainwindow(object):
     def retranslateUi(self, Gobang_Mainwindow):
         _translate = QtCore.QCoreApplication.translate
         Gobang_Mainwindow.setWindowTitle(_translate("Gobang_Mainwindow", "五子棋-客户端"))
-        self.menu_local.setTitle(_translate("Gobang_Mainwindow", "单机"))
-        self.menu_socket.setTitle(_translate("Gobang_Mainwindow", "联机"))
-        self.single_player.setText(_translate("Gobang_Mainwindow", "单人"))
-        self.two_player.setText(_translate("Gobang_Mainwindow", "双人"))
+        self.menu_local.setTitle(_translate("Gobang_Mainwindow", "开始游戏"))
+        self.single_player.setText(_translate("Gobang_Mainwindow", "单机单人"))
+        self.two_player.setText(_translate("Gobang_Mainwindow", "单机双人"))
+        self.online_game.setText(_translate("Gobang_Mainwindow", "联机游戏"))
 from Gobang_chessboard import ChessBoard
-

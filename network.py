@@ -13,8 +13,8 @@ def send(socket_: socket.socket, message):
     # print(length)
     head = '#' + str(length).rjust(6, '0') + '#'
     socket_.sendall(head.encode())
-    # send_len = socket_.send(content)
-    # print("\t发送：", content)
+    send_len = socket_.send(content)
+    print("\t发送：", content)
     # print(send_len)
 
 
