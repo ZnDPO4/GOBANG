@@ -76,9 +76,9 @@ class ChessBoard(QFrame):
         painter.setPen(self.PEN_THIN)
         for x in range(15):
             for y in range(15):
-                if self.field[x][y] == ChessColor.black.value:
+                if self.field.get_point(x, y) == ChessColor.black.value:
                     painter.setBrush(self.BRUSH_1)
-                elif self.field[x][y] == ChessColor.white.value:
+                elif self.field.get_point(x, y) == ChessColor.white.value:
                     painter.setBrush(self.BRUSH_2)
                 else:
                     continue

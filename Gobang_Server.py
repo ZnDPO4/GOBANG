@@ -1,40 +1,55 @@
+# -*- coding: utf-8 -*-
+
 from PyQt5.QtWidgets import QApplication, QWidget
 from PyQt5.QtCore import Qt, pyqtSignal, QThread, QObject, QTimer
 from random import choice
 from network import *
 from Gobang_ import *
+import typing
 
 
 class ServerMessageHandle(QThread):
+    discon = pyqtSignal(tuple)
     join = pyqtSignal(tuple)
     go_chess = pyqtSignal(int, int, int)
+    surrender = pyqtSignal(tuple)
+    ready = pyqtSignal(tuple)
+    quit_ = pyqtSignal(tuple)
 
     def __init__(self, server, connection: socket.socket):
         super().__init__()
         self.server = server
         self.conn = connection
+        self.addr = self.conn.getpeername()
 
     def run(self):
         while True:
             try:
                 message = receive(self.conn)  # 接收消息
                 if message is None:
+                    print("空信息")
+                    self.discon.emit(self.addr)  # 断开连接
                     break
                 type_ = message.get('type')
                 if type_ == 'name':  #
                     user_name = message.get("user_name")
-                    addr = self.conn.getpeername()
                     print("已连接用户：" + user_name)
                 elif type_ == 'join':  #
-                    addr= self.conn.getpeername()
-                    self.join.emit(addr)
+                    self.join.emit(self.addr)
                 elif type_ == 'go':  # 玩家落子
                     num = message.get('num')
                     x = message.get('x')
                     y = message.get('y')
                     self.go_chess.emit(num, x, y)
+                elif type_ == 'surrender':  # 认输
+                    self.surrender.emit(self.addr)
+                elif type_ == 'ready':  # 准备
+                    self.ready.emit(self.addr)
+                elif type_ == 'quit':  # 退出
+                    self.quit_.emit(self.addr)
             except ConnectionResetError:  # 掉线
                 print(traceback.print_exc())
+                self.quit_.emit(self.addr)
                 break
             except OSError:
                 print(traceback.print_exc())
@@ -48,11 +63,11 @@ class GameFlyingChessServer(QWidget):
         self.port = "9213"
         self.name = '服务器'
         self.server = None
-        self.clients = {}
-        self.players = []
+        self.clients: typing.Dict[tuple, Player] = {}  # key: addr, value: Player
+        self.players: typing.Dict[int, Player]  = {}  # key: num, value: Player
         self.keep_listening = True
 
-        self.field = [[0 for i in range(15)] for j in range(15)]
+        self.field = Field()
         self.started = False
         self.player_now = ChessColor.black
 
@@ -63,12 +78,12 @@ class GameFlyingChessServer(QWidget):
         pass
 
     def send_(self, message, addr):
-        connection = self.clients[addr]
+        connection = self.clients[addr].connection
         send(connection, message)
 
     def send_to_all(self, message):
-        for addr in self.players:
-            self.send_(message, addr)
+        for player in self.clients.values():
+            send(player.connection, message)
 
     def initialize(self):
         try:
@@ -96,13 +111,15 @@ class GameFlyingChessServer(QWidget):
         while True:
             try:
                 conn, addr = self.server.accept()
-                self.clients[addr] = conn
+                self.clients[addr] = Player(conn, addr)
                 message_handle = ServerMessageHandle(self, conn)
+                message_handle.discon.connect(self.disconnect_)
                 message_handle.join.connect(self.join_room)
                 message_handle.go_chess.connect(self.go_chess)
+                message_handle.quit_.connect(self.client_quit)
                 message_handle.start()
                 print('info', "已连接-地址：{}".format(str(addr)))
-                self.send_(to_message('info', text="已成功连接到服务器\r\n"), addr)
+
             except socket.timeout:
                 print("### timeout ###")
                 if not self.keep_listening:
@@ -113,18 +130,33 @@ class GameFlyingChessServer(QWidget):
             except OSError:
                 print(traceback.print_exc())
                 break
+            except Exception:
+                print(traceback.print_exc())
         print('info', "退出连接")
+
+    def disconnect_(self, addr):
+        """断开一个连接"""
+        print("disconnect")
+        try:
+            self.clients[addr].connection.shutdown(2)  # 关闭连接
+            self.clients[addr].connection.close()
+            self.clients.pop(addr)
+            print("断开", self.clients)
+        except KeyError:
+            return
+        except Exception:
+            print(traceback.print_exc())
 
     def join_room(self, addr):
         """加入房间"""
-        num_of_players = len(self.players)
+        num_of_players = len(self.clients)
         if num_of_players == 0:  # 新建房间
             self.send_(to_message("join", code=0), addr)
-            self.players.append(addr)
+            self.clients[addr].room_num = 1
             print("{}加入房间".format(addr))
         elif 1 <= num_of_players <= 1:  # 加入已有的房间
             self.send_(to_message("join", code=1), addr)
-            self.players.append(addr)
+            self.clients[addr].room_num = 1
             print("{}加入房间".format(addr))
             self.keep_listening = False
             QTimer.singleShot(1000, self.start_game)  # 延时一秒开始游戏
@@ -134,33 +166,58 @@ class GameFlyingChessServer(QWidget):
     def go_chess(self, num, x, y):
         color = "黑" if num == ChessColor.black.value else "白"
         print("{}方落子".format(color))
-        self.field[x][y] = num
+        self.field.set_point(num, x,y)
         if exam(self.field, self.player_now, x, y) is True:
             self.started = False
             print("{}方获胜".format(color))
             self.send_win(num)
         self.send_go(num, x, y)
 
+    def client_quit(self, addr):
+        self.disconnect_(addr)
+        if self.started:
+            self.send_end()
+        else:
+            pass
+        self.disconnect_(addr)
+
     def start_game(self):
-        """发送玩家的执子颜色"""
-        for x in range(15):
-            for y in range(15):
-                self.field[x][y] = 0
+        """分配并发送玩家的执子颜色"""
+        self.field.clear()
         self.player_now = ChessColor.black
         num = choice([1, -1])
-        self.send_(to_message("start", number=num), self.players[0])
-        self.send_(to_message("start", number=-num), self.players[1])
+        player_list = list(self.clients.values())
+        player_list[0].player_num = num
+        player_list[1].player_num = -num
+        self.players[num] = player_list[0]
+        self.players[-num] = player_list[1]
+        send(player_list[0].connection, to_message("start", num=num))
+        send(player_list[1].connection, to_message("start", num=-num))
 
     def send_go(self, num, x, y):
         """发送落子信息"""
         self.send_to_all(to_message("go", num=num, x=x, y=y))
 
-    def send_ban(self):
+    def send_ban(self, num):
         """发送禁手警告"""
+        send(self.players[num].connection, to_message("ban"))
 
     def send_win(self, num):
         """发送获胜消息"""
-        self.send_to_all(to_message("win", num=num))
+        self.send_to_all(to_message("end", num=num))
+
+    def send_end(self):
+        self.send_to_all(to_message("end", num=-2))
+
+
+class Player:
+    def __init__(self, conn=None, addr=None, name="", num=0):
+        self.address = addr
+        self.connection = conn
+        self.user_name = name
+        self.player_num = num
+        self.room_num = 0
+        self.ready = False
 
 
 if __name__ == '__main__':
