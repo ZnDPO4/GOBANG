@@ -9,7 +9,6 @@ import typing
 
 
 class ServerMessageHandle(QThread):
-    discon = pyqtSignal(tuple)
     join = pyqtSignal(tuple)
     go_chess = pyqtSignal(int, int, int)
     surrender = pyqtSignal(tuple)
@@ -24,11 +23,11 @@ class ServerMessageHandle(QThread):
 
     def run(self):
         while True:
+            message = receive(self.conn)  # 接收消息
             try:
-                message = receive(self.conn)  # 接收消息
                 if message is None:
-                    print("空信息")
-                    self.discon.emit(self.addr)  # 断开连接
+                    print("<message_handle> null message", self.addr)
+                    self.quit_.emit(self.addr)  # 断开连接
                     break
                 type_ = message.get('type')
                 if type_ == 'name':  #
@@ -48,8 +47,7 @@ class ServerMessageHandle(QThread):
                 elif type_ == 'quit':  # 退出
                     self.quit_.emit(self.addr)
             except ConnectionResetError:  # 掉线
-                print(traceback.print_exc())
-                self.quit_.emit(self.addr)
+                print("<message_handle> 客户端掉线", self.addr)
                 break
             except OSError:
                 print(traceback.print_exc())
@@ -59,8 +57,8 @@ class ServerMessageHandle(QThread):
 class GameFlyingChessServer(QWidget):
     def __init__(self):
         super().__init__()
-        self.ip = "10.230.11.57"
-        self.port = "9213"
+        self.ip = "192.168.31.213"
+        self.port = "9001"
         self.name = '服务器'
         self.server = None
         self.clients: typing.Dict[tuple, Player] = {}  # key: addr, value: Player
@@ -113,7 +111,6 @@ class GameFlyingChessServer(QWidget):
                 conn, addr = self.server.accept()
                 self.clients[addr] = Player(conn, addr)
                 message_handle = ServerMessageHandle(self, conn)
-                message_handle.discon.connect(self.disconnect_)
                 message_handle.join.connect(self.join_room)
                 message_handle.go_chess.connect(self.go_chess)
                 message_handle.quit_.connect(self.client_quit)
@@ -136,25 +133,34 @@ class GameFlyingChessServer(QWidget):
 
     def disconnect_(self, addr):
         """断开一个连接"""
-        print("disconnect")
         try:
-            self.clients[addr].connection.shutdown(2)  # 关闭连接
-            self.clients[addr].connection.close()
-            self.clients.pop(addr)
-            print("断开", self.clients)
+            player = self.clients.pop(addr)
+            if player:
+                print("disconnect", addr)
+                player.connection.shutdown(2)  # 关闭连接
+                player.connection.close()
         except KeyError:
             return
         except Exception:
             print(traceback.print_exc())
 
+    def game_over(self, winner_num):
+        print("游戏结束")
+        self.started = False
+        if winner_num in [-1, 0, 1]:
+            self.send_end(winner_num)
+        else:
+            self.send_end(-2)
+
     def join_room(self, addr):
         """加入房间"""
         num_of_players = len(self.clients)
-        if num_of_players == 0:  # 新建房间
+        print("join room", num_of_players)
+        if num_of_players == 1:  # 新建房间
             self.send_(to_message("join", code=0), addr)
             self.clients[addr].room_num = 1
             print("{}加入房间".format(addr))
-        elif 1 <= num_of_players <= 1:  # 加入已有的房间
+        elif 2 <= num_of_players <= 2:  # 加入已有的房间
             self.send_(to_message("join", code=1), addr)
             self.clients[addr].room_num = 1
             print("{}加入房间".format(addr))
@@ -167,19 +173,22 @@ class GameFlyingChessServer(QWidget):
         color = "黑" if num == ChessColor.black.value else "白"
         print("{}方落子".format(color))
         self.field.set_point(num, x,y)
-        if exam(self.field, self.player_now, x, y) is True:
-            self.started = False
-            print("{}方获胜".format(color))
-            self.send_win(num)
         self.send_go(num, x, y)
+        if exam(self.field, self.player_now, x, y) is True:
+            print("{}方获胜".format(color))
+            self.game_over(num)
 
     def client_quit(self, addr):
-        self.disconnect_(addr)
-        if self.started:
-            self.send_end()
-        else:
-            pass
-        self.disconnect_(addr)
+        try:
+            self.disconnect_(addr)
+            if self.started:
+                self.game_over(-2)
+                for player in self.players.values():
+                    self.disconnect_(player.address)
+            else:
+                pass
+        except Exception:
+            print(traceback.print_exc())
 
     def start_game(self):
         """分配并发送玩家的执子颜色"""
@@ -193,6 +202,7 @@ class GameFlyingChessServer(QWidget):
         self.players[-num] = player_list[1]
         send(player_list[0].connection, to_message("start", num=num))
         send(player_list[1].connection, to_message("start", num=-num))
+        self.started = True
 
     def send_go(self, num, x, y):
         """发送落子信息"""
@@ -202,27 +212,26 @@ class GameFlyingChessServer(QWidget):
         """发送禁手警告"""
         send(self.players[num].connection, to_message("ban"))
 
-    def send_win(self, num):
-        """发送获胜消息"""
+    def send_end(self, num):
         self.send_to_all(to_message("end", num=num))
-
-    def send_end(self):
-        self.send_to_all(to_message("end", num=-2))
 
 
 class Player:
-    def __init__(self, conn=None, addr=None, name="", num=0):
+    def __init__(self, conn=None, addr=None, name=""):
         self.address = addr
         self.connection = conn
         self.user_name = name
-        self.player_num = num
+        self.player_num = 0
         self.room_num = 0
         self.ready = False
 
 
 if __name__ == '__main__':
     import sys
-    App = QApplication(sys.argv)
-    server = GameFlyingChessServer()
-    sys.exit(App.exec_())
+    try:
+        App = QApplication(sys.argv)
+        server = GameFlyingChessServer()
+        sys.exit(App.exec_())
+    except Exception:
+        print(traceback.print_exc())
 

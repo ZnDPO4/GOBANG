@@ -1,5 +1,14 @@
+# -*- coding: utf-8 -*-
+
 import enum
+from copy import deepcopy
 import traceback
+
+
+class GameType(enum.Enum):
+    one_player = 1
+    two_players = 2
+    online_game = 3
 
 
 class ChessColor(enum.Enum):
@@ -36,7 +45,29 @@ class ChessType(enum.Enum):
         return str(self.name)
 
 
-def exam(field, player_color: ChessColor, x, y):  # 棋盘，落子方编号，落子坐标
+class Field:
+    """棋盘数据类"""
+    def __init__(self):
+        super().__init__()
+        self._field = [[0 for i in range(15)] for j in range(15)]
+
+    def get_field(self):
+        return deepcopy(self._field)
+
+    def set_point(self, num, x, y):
+        if num in list(map(lambda c: c.value, ChessColor)):  # 检验输入值合法
+            self._field[x][y] = num
+
+    def get_point(self, x, y):
+        return self._field[x][y]
+
+    def clear(self):
+        for x in range(15):
+            for y in range(15):
+                self._field[x][y] = 0
+
+
+def exam(field: Field, player_color: ChessColor, x, y):  # 棋盘，落子方编号，落子坐标
     """判断四个方向上的棋形"""
     try:
         situation = []
@@ -51,9 +82,9 @@ def exam(field, player_color: ChessColor, x, y):  # 棋盘，落子方编号，�
                     if direc[i] == Endpoint.self:  # 某一端必须还是自己的棋才会继续检查
                         try:
                             if i == 0:
-                                ahead = field[x + d[0] * k][y + d[1] * k]  # 正向判断
+                                ahead = field.get_point(x + d[0] * k, y + d[1] * k)  # 正向判断
                             else:
-                                ahead = field[x - d[0] * k][y - d[1] * k]  # 反向判断
+                                ahead = field.get_point(x - d[0] * k, y - d[1] * k)  # 反向判断
                             if ahead == player_color.value:
                                 count += 1  # 计数+1
                             elif ahead == 0:  # 端点空白
@@ -97,4 +128,3 @@ def exam_win(player_color, situation):
         else:
             continue
     return False
-

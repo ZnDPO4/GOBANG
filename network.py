@@ -8,20 +8,24 @@ import json
 
 
 def send(socket_: socket.socket, message):
-    content = message.encode()
-    length = len(content)
-    # print(length)
-    head = '#' + str(length).rjust(6, '0') + '#'
-    socket_.sendall(head.encode())
-    send_len = socket_.send(content)
-    print("\t发送：", content)
-    # print(send_len)
+    try:
+        content = message.encode()
+        length = len(content)
+        # print(length)
+        head = '#' + str(length).rjust(6, '0') + '#'
+        socket_.sendall(head.encode())
+        send_len = socket_.send(content)
+        print("\t发送：", content, socket_.getpeername())
+        # print(send_len)
+    except OSError:
+        print("####发送失败：", message)
 
 
 def receive(socket_: socket.socket):
     try:
         head = socket_.recv(8)
         if not head:  # 空信息说明连接断开
+            print("<recieve> 空信息", socket_.getpeername())
             return None
         print("\t信息头：", head)
         msg_size = int(head.decode().strip('#'))
@@ -33,7 +37,7 @@ def receive(socket_: socket.socket):
         # print("信息内容：", message)
         return message
     except OSError:
-        print(traceback.print_exc())
+        print("<recieve> 连接已断开", socket_.getpeername())
         return None
 
 
