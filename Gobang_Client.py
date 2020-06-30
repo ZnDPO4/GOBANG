@@ -23,8 +23,8 @@ class ClientMessageHandle(QThread):
 
     def run(self):
         while True:
+            message = receive(self.conn)  # 接收消息
             try:
-                message = receive(self.conn)  # 接收消息
                 if message is None:
                     self.discon.emit()
                     break
