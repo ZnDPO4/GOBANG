@@ -28,7 +28,6 @@ class ServerMessageHandle(QThread):
                 if message is None:
                     print("<message_handle> null message", self.addr)
                     self.quit_.emit(self.addr)  # 断开连接
-                    print("=DEBUG= function <ServerMessageHandle.run>: elf.quit_.emit(self.addr) finished")
                     break
                 type_ = message.get('type')
                 if type_ == 'name':  #
@@ -137,18 +136,18 @@ class GameFlyingChessServer(QWidget):
         try:
             player = self.clients.pop(addr)
             if player:
-                print("=DEBUG= function <disconnect_>: if player, player = " + str(player))
-                print("=DEBUG= function <disconnect_>: if player, addr = " + str(addr))
+                debug("function <disconnect_>: if player, player = " + str(player))
+                debug("function <disconnect_>: if player, addr = " + str(addr))
                 print("disconnect", addr)
                 player.connection.shutdown(2)  # 关闭连接
-                print("=DEBUG= function <disconnect_>: if player, shutdown(2) finished")
+                debug("function <disconnect_>: if player, shutdown(2) finished")
                 player.connection.close()
-                print("=DEBUG= function <disconnect_>: if player, connection closed")
+                debug("function <disconnect_>: if player, connection closed")
         except KeyError:
-            print("=DEBUG= function <disconnect_>: key error")
+            debug("function <disconnect_>: key error")
             return
         except Exception:
-            print("=DEBUG= function <disconnect_>: exceoption")
+            debug("function <disconnect_>: exceoption")
             print(traceback.print_exc())
 
     def game_over(self, winner_num):
@@ -187,22 +186,22 @@ class GameFlyingChessServer(QWidget):
 
     def client_quit(self, addr):
         try:
-            print("=DEBUG= function <client_quit>: addr = " + str(addr))
+            debug("function <client_quit>: addr = " + str(addr))
             self.disconnect_(addr)
-            print("=DEBUG= function <client_quit>: disconnected")
+            debug("function <client_quit>: disconnected")
             if self.started:
-                print("=DEBUG= function <client_quit>: started")
+                debug("function <client_quit>: started")
                 self.game_over(-2)
-                print("=DEBUG= function <client_quit>: game_over(-2) finished")
+                debug("function <client_quit>: game_over(-2) finished")
                 for player in self.players.values():
-                    print("=DEBUG= function <client_quit>: player.address = " + str(player.address))
+                    debug("function <client_quit>: player.address = " + str(player.address))
                     self.disconnect_(player.address)
-                    print("=DEBUG= function <client_quit>: disconnected")
+                    debug("function <client_quit>: disconnected")
             else:
-                print("=DEBUG= function <client_quit>: started == false")
+                debug("function <client_quit>: started == false")
                 pass
         except Exception:
-            print("=DEBUG= function <client_quit>: exception")
+            debug("function <client_quit>: exception")
             print(traceback.print_exc())
 
     def start_game(self):

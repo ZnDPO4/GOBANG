@@ -54,3 +54,7 @@ def new_thread(func, *args):
     t.start()
     return t
 
+
+def debug(info, head="", end=""):
+    if 1:
+        print(head, "=DEBUG=", info, end=end)
