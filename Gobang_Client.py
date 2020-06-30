@@ -23,8 +23,8 @@ class ClientMessageHandle(QThread):
 
     def run(self):
         while True:
+            message = receive(self.conn)  # 接收消息
             try:
-                message = receive(self.conn)  # 接收消息
                 if message is None:
                     self.discon.emit()
                     break
@@ -127,12 +127,17 @@ class GobangClient(QMainWindow, Ui_Gobang_Mainwindow):
         print("{}方获胜".format(color))
         self.statusbar.showMessage("{}方获胜".format(color))
 
+    def stop(self):
+        self.started = False
+        self.statusbar.showMessage("对方断开连接")
+
     def restart(self):
         if self.started:
             reply = QMessageBox.question(self, "！", "一局游戏没有结束，是否确认重开？")
-            if reply:
+            if reply == QMessageBox.Yes:
                 if self.game_type == GameType.online_game:
                     self.send_quit()
+                    self.online_game.setEnabled(True)
                 return True  # 重开
             else:
                 return False  # 取消
@@ -203,12 +208,12 @@ class GobangClient(QMainWindow, Ui_Gobang_Mainwindow):
 
     def disconnect_(self):
         try:
-            print('info', "已断开连接")
             self.socket.shutdown(2)
             self.socket.close()
+            print('disconnected', "已断开连接")
             self.online_game.setEnabled(True)
-        except Exception:
-            print(traceback.print_exc())
+        except OSError:
+            pass
 
     # ----------------------------------------发送信息----------------------------------------
     def ask_join_room(self):
@@ -223,6 +228,7 @@ class GobangClient(QMainWindow, Ui_Gobang_Mainwindow):
     def send_quit(self):
         """向服务端发送退出信号"""
         send(self.socket, to_message("quit"))
+        self.disconnect_()
 
     # ----------------------------------------接受信息响应函数----------------------------------------
     def start_online_game(self, num):
@@ -252,13 +258,14 @@ class GobangClient(QMainWindow, Ui_Gobang_Mainwindow):
         if num in [-1, 0, 1]:  # 胜/平
             self.win(num)
         elif num == -2:  # 一方断开连接
-            self.disconnect_()
+            self.stop()
+        self.disconnect_()
 
     # ----------------------------------------其他----------------------------------------
     def closeEvent(self, event) -> None:
         if self.started:
             reply = QMessageBox.question(self, "！", "游戏正在进行，是否退出？")
-            if reply:
+            if reply == QMessageBox.Yes:
                 event.accept()
             else:
                 event.ignore()
