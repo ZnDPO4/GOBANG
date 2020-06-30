@@ -25,6 +25,11 @@ class Endpoint(enum.Enum):
     self = 1  # 自己的棋
     opponent = 2  # 对手的棋
 
+class SimpleChessType(enum.Enum):
+    """简略的棋形枚举类"""
+    ban = -1  # 禁手
+    none = 0  # 无事发生
+    win = 1  # 有人胜出
 
 class ChessType(enum.Enum):
     """棋形"""

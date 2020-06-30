@@ -37,7 +37,8 @@ def receive(socket_: socket.socket):
         # print("信息内容：", message)
         return message
     except OSError:
-        print("<recieve> 连接已断开", socket_.getpeername())
+        print("<recieve> 连接已断开")
+        # print("<recieve> 连接已断开", socket_.getpeername())
         return None
 
 
